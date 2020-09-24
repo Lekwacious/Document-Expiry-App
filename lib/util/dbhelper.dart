@@ -1,0 +1,139 @@
+import 'package:flutter/material.dart';
+import 'package:sqflite/sqflite.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:async';
+import 'dart:io';
+import '../models/model.dart';
+
+class DbHelper{
+  // table
+  static String tableDocs = 'docs';
+
+  //fields of the docs table
+String docId = "id";
+String docTitle = "title";
+String docExpiration = "expiration";
+
+String fqYear = "fqYear";
+String fqHalfYear = "fqHalfYear";
+String fqQuater = "fqQuarter";
+String fqMonth = "fqMonth";
+
+// singleton
+static final DbHelper _dbHelper = DbHelper._internal();
+
+// constructor
+DbHelper._internal();
+
+factory DbHelper(){
+  return _dbHelper;
+}
+// Database entry point
+
+static Database _db;
+
+Future<Database> get db async {
+  if (_db == null){
+    _db = await initializeDb();
+  }
+  return _db;
+}
+
+Future<Database> initializeDb() async {
+  Directory d = await getApplicationDocumentsDirectory();
+  String p  = d.path + "/docexpire.db";
+  var db = await openDatabase(p, version: 1, onCreate: _createDb);
+  return db;
+}
+
+
+// Create database tables.
+  void _createDb(Database db, int version) async {
+    await db.execute(
+        "CREATE TABLE $tableDocs($docId INTEGER PRIMARY KEY, $docTitle TEXT, "
+            + "$docExpiration TEXT, " +
+            "$fqYear INTEGER, $fqHalfYear INTEGER, $fqQuater INTEGER, " +
+            "$fqMonth INTEGER)"
+    );
+  }
+
+
+
+// INSEERT A NEW DOC
+ Future<int> insertDoc(Doc doc) async{
+  var r;
+  Database db = await this.db;
+  try{
+    r = await db.insert(tableDocs, doc.toMap());
+  }
+  catch(e){
+    debugPrint("insertDoc: " + e.toString());
+  }
+  return r;
+ }
+
+ // GFet the list of docs.
+
+Future<List> getDocs() async{
+  Database db = await this.db;
+  var r = await db.rawQuery("SELECT * FROM $tableDocs ORDER BY $docExpiration ASC");
+  return r;
+}
+
+// Gets a Doc based on the id
+
+Future<List> getDoc(int id) async{
+  Database db = await this.db;
+  var r = await db.rawQuery("SELECT * FROM $tableDocs WHERE $docId = " + id.toString() + "");
+  return r;
+}
+
+  Future<List> getDocFromStr(String payload) async {
+    List<String> p = payload.split("|");
+    if (p.length == 2) {
+      Database db = await this.db;
+      var r = await db.rawQuery(
+          "SELECT * FROM $tableDocs WHERE $docId = " + p[0] +
+              " AND $docExpiration = '" + p[1] + "'" );
+      return r;
+    }
+    else
+      return null;
+  }
+// Get the number of docs.
+  Future<int> getDocsCount() async {
+    Database db = await this.db;
+    var r = Sqflite.firstIntValue(
+        await db.rawQuery("SELECT COUNT(*) FROM $tableDocs")
+    );
+    return r;
+  }
+// Get the max document id available on the database.
+  Future<int> getMaxId() async {
+    Database db = await this.db;
+    var r = Sqflite.firstIntValue(
+        await db.rawQuery("SELECT MAX(id) FROM $tableDocs")
+    );
+    return r;
+  }
+// Update a doc.
+  Future<int> updateDoc(Doc doc) async {
+    var db = await this.db;
+    var r = await db.update(tableDocs, doc.toMap(),
+        where: "$docId = ?", whereArgs: [doc.id]);
+    return r;
+  }
+  //Delete a doc
+Future<int> deleteDoc(int id) async{
+  var db = await this.db;
+  int r = await db.rawDelete("DELETE FROM $tableDocs WHERE $docId = $id");
+  return r;
+}
+
+// Delete all rows.
+  Future<int> deleteRows(String tbl) async {
+  var db = await this.db;
+  int r = await db.rawDelete("DELETE FROM $tbl");
+  }
+
+}
